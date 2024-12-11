@@ -4,8 +4,6 @@ The dataset contains 23 columns and 10,000 entries. It includes a mix of numeric
 - **Categorical/Text Columns**: `authors`, `original_title`, `language_code`, `title`, etc.
 - **Columns with Missing Values**: `isbn`, `isbn13`, `original_publication_year`, `original_title`, `language_code`.
 
-I'll compute a detailed statistical summary for the numerical columns and highlight additional metrics for others. Generating the report now.
-
 Here is the detailed statistical summary of the numerical columns in your dataset:
 
 | Column                     | Count    | Mean        | Std Dev     | Min        | 25%         | Median      | 75%         | Max         | Range         |
@@ -19,10 +17,13 @@ Here is the detailed statistical summary of the numerical columns in your datase
 
 This table shows metrics like **median**, **range**, and **quantiles** (25th and 75th percentiles) for each column.
 
-Columns with Missing Values:
+### **Columns with Missing Values**
+| Column Name                 | Missing Entries | Percentage (%) |
+|-----------------------------|-----------------|----------------|
+| `language_code`             | 1,084           | 10.84          |
+| `isbn`                      | 700             | 7.00           |
+| `isbn13`                    | 585             | 5.85           |
+| `original_title`            | 585             | 5.85           |
+| `original_publication_year` | 21              | 0.21           |
 
-language_code: 1,084 missing entries (10.84%)
-isbn: 700 missing entries (7.00%)
-isbn13: 585 missing entries (5.85%)
-original_title: 585 missing entries (5.85%)
-original_publication_year: 21 missing entries (0.21%)
+---
