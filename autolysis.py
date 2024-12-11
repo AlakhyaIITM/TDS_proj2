@@ -12,6 +12,7 @@ if api_key:
 else:
     print("API Key not found. Please set it as an environment variable.")
 
+
 def load_data(file_path):
     """Load dataset with encoding error handling."""
     try:
@@ -22,6 +23,7 @@ def load_data(file_path):
         print(f"Error loading data: {e}")
         return None
 
+
 def create_output_folder(file_path):
     """Create a folder named after the CSV file (excluding .csv) for saving images."""
     folder_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -29,12 +31,15 @@ def create_output_folder(file_path):
         os.makedirs(folder_name)
     return folder_name
 
+
 def analyze_data(data):
     """Display basic statistics and insights from the dataset."""
     print("--- Summary Statistics ---")
     print(data.describe())
+
     print("--- Missing Data ---")
     print(data.isnull().sum())
+
 
 def visualize_data(data, output_folder):
     """Generate and save visualizations."""
@@ -62,26 +67,28 @@ def visualize_data(data, output_folder):
 
     print("--- Graphs Saved Successfully ---")
 
+
 def generate_story(data):
     """Generate insights and a story using the dataset."""
     story = """
     ## Data Analysis Summary
-    
+
     The dataset contains various columns with information on different attributes. 
     Here's a summary of the findings:
-    
-    - **Key Insights**: 
+
+    - **Key Insights**:
         - Example insights here (replace with actual analysis).
         - Trends observed across different columns.
         
     - **Recommendations**:
         - Based on the analysis, it's recommended to focus on certain patterns, such as...
-        
+
     ### Visualizations
     - [Correlation Heatmap](./correlation_heatmap.png)
     """
     
     return story
+
 
 def save_story(story, output_folder):
     """Save the analysis story into a README.md file."""
@@ -89,6 +96,7 @@ def save_story(story, output_folder):
     with open(readme_path, "w") as file:
         file.write(story)
     print(f"Saved: {readme_path}")
+
 
 def main():
     """Main script function."""
@@ -106,6 +114,7 @@ def main():
         # Generate story and save it to README.md
         story = generate_story(data)
         save_story(story, output_folder)
+
 
 if __name__ == "__main__":
     main()
