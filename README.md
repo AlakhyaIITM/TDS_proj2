@@ -19,6 +19,24 @@ Autolysis is a Python-based tool that streamlines the process of exploring, anal
 
 ## Requirements
 
+### OpenAI Version Requirement
+
+To run the `gpt-4o-mini` model, please ensure you have an appropriate version of the OpenAI Python library. The current version of the OpenAI API you're using should support `gpt-4o-mini`, but if you're encountering issues, please make sure you're using a compatible version.
+
+#### Solution:
+1. Install an older version of the `openai` package that supports the `gpt-4o-mini` model, as newer versions might have deprecated it.
+   
+   You can install a compatible version by running:
+   ```bash
+   pip install openai==0.28.0
+   ```
+
+2. After installing the required version, you should be able to run the script and access the `gpt-4o-mini` model successfully.
+
+---
+
+Feel free to add this information to your README to help others set up the project properly.
+
 - Python 3.7+
 - Libraries: pandas, seaborn, matplotlib, fastapi, uvicorn
 
