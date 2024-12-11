@@ -2,7 +2,7 @@
 This dataset provides various statistical insights, which are summarized below:
 
 #### Summary Statistics:
-           overall      quality  repeatability
+                      overall      quality     repeatability
            count  2652.000000  2652.000000    2652.000000
            mean      3.047511     3.209276       1.494721
            std       0.762180     0.796743       0.598289
