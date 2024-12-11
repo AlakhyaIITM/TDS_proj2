@@ -2,12 +2,13 @@ import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import requests
+import openai
 
-# Load API key from environment variable
-api_key = os.getenv("AIPROXY_TOKEN")
+# Set up the API key and proxy URL
+openai.api_key = os.getenv("AIPROXY_TOKEN")
+openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 
-if api_key:
+if openai.api_key:
     print("API Key loaded successfully!")
 else:
     print("API Key not found. Please set it as an environment variable.")
@@ -16,7 +17,7 @@ else:
 def load_data(file_path):
     """Load dataset with encoding error handling."""
     try:
-        data = pd.read_csv(file_path, encoding='ISO-8859-1')  # Use ISO-8859-1 to handle encoding issues
+        data = pd.read_csv(file_path, encoding='ISO-8859-1')  # Handle encoding issues
         print("Data loaded successfully!")
         return data
     except Exception as e:
@@ -36,9 +37,11 @@ def analyze_data(data):
     """Display basic statistics and insights from the dataset."""
     print("--- Summary Statistics ---")
     print(data.describe())
-
     print("--- Missing Data ---")
     print(data.isnull().sum())
+
+    # Return a summary of the data analysis
+    return data.describe().to_string()
 
 
 def visualize_data(data, output_folder):
@@ -68,26 +71,36 @@ def visualize_data(data, output_folder):
     print("--- Graphs Saved Successfully ---")
 
 
-def generate_story(data):
-    """Generate insights and a story using the dataset."""
-    story = """
-    ## Data Analysis Summary
-
-    The dataset contains various columns with information on different attributes. 
-    Here's a summary of the findings:
-
-    - **Key Insights**:
-        - Example insights here (replace with actual analysis).
-        - Trends observed across different columns.
-        
-    - **Recommendations**:
-        - Based on the analysis, it's recommended to focus on certain patterns, such as...
-
-    ### Visualizations
-    - [Correlation Heatmap](./correlation_heatmap.png)
-    """
+def generate_story(data_summary):
+    """Generate insights and a story using the dataset summary."""
+    report_prompt = f"""
+    Create a summary of the following dataset analysis:
     
-    return story
+    {data_summary}
+    
+    Include:
+    - Key trends and insights
+    - Any notable correlations or patterns
+    - Recommendations for next steps based on the data
+    """
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",  # Keep the model as gpt-4-mini
+            messages=[
+                {"role": "system", "content": "You are an assistant generating data analysis summaries."},
+                {"role": "user", "content": report_prompt}
+            ],
+            max_tokens=500
+        )
+
+        # Extract the generated content
+        story = response['choices'][0]['message']['content'].strip()
+        return story
+
+    except openai.OpenAIError as e:  # Updated to catch the new exception
+        print(f"Error generating story: {e}")
+        return "Story generation failed due to an error."
 
 
 def save_story(story, output_folder):
@@ -108,11 +121,11 @@ def main():
         output_folder = create_output_folder(file_path)
 
         # Perform analysis and visualization
-        analyze_data(data)
+        data_summary = analyze_data(data)
         visualize_data(data, output_folder)
 
         # Generate story and save it to README.md
-        story = generate_story(data)
+        story = generate_story(data_summary)
         save_story(story, output_folder)
 
 
