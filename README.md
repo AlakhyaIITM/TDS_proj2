@@ -33,10 +33,6 @@ To run the `gpt-4o-mini` model, please ensure you have an appropriate version of
 
 2. After installing the required version, you should be able to run the script and access the `gpt-4o-mini` model successfully.
 
----
-
-Feel free to add this information to your README to help others set up the project properly.
-
 - Python 3.7+
 - Libraries: pandas, seaborn, matplotlib, fastapi, uvicorn
 
