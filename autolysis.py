@@ -116,8 +116,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-git status
-git add .
-git commit --m "Upgraded code"
-git branch -M main
-git push -u origin main
