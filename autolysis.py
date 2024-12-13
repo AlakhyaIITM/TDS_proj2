@@ -3,6 +3,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import openai
+import argparse
 
 # Set up the API key and proxy URL
 openai.api_key = os.getenv("AIPROXY_TOKEN")
@@ -12,7 +13,6 @@ if openai.api_key:
     print("API Key loaded successfully!")
 else:
     print("API Key not found. Please set it as an environment variable.")
-
 
 def load_data(file_path):
     """Load dataset with encoding error handling."""
@@ -32,14 +32,12 @@ def load_data(file_path):
         print(f"Error loading data: {e}")
         return None
 
-
 def create_output_folder(file_path):
     """Create a folder named after the CSV file (excluding .csv) for saving images."""
     folder_name = os.path.splitext(os.path.basename(file_path))[0]
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
     return folder_name
-
 
 def analyze_data(data):
     """Display basic statistics and insights from the dataset."""
@@ -53,7 +51,6 @@ def analyze_data(data):
     except Exception as e:
         print(f"Error analyzing data: {e}")
         return ""
-
 
 def visualize_data(data, output_folder):
     """Generate and save visualizations."""
@@ -85,12 +82,11 @@ def visualize_data(data, output_folder):
 
     print("--- Graphs Saved Successfully ---")
 
-
 def generate_story(data_summary):
     """Generate insights and a story using the dataset summary."""
     if len(data_summary) > 1000:  # Avoid exceeding token limits
         data_summary = data_summary[:1000] + "..."
-
+    
     report_prompt = f"""
     Create a summary of the following dataset analysis:
     
@@ -120,7 +116,6 @@ def generate_story(data_summary):
         print(f"Error generating story: {e}")
         return "Story generation failed due to an error."
 
-
 def save_story(story, output_folder):
     """Save the analysis story into a README.md file."""
     readme_path = os.path.join(output_folder, "README.md")
@@ -131,10 +126,15 @@ def save_story(story, output_folder):
     except Exception as e:
         print(f"Error saving story: {e}")
 
-
 def main():
     """Main script function."""
-    file_path = input("Enter the path to the CSV file: ").strip()
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description="Process CSV file for autolysis.")
+    parser.add_argument("file_path", type=str, help="Path to the CSV file")
+    
+    args = parser.parse_args()
+
+    file_path = args.file_path  # Use the file path from the argument
     data = load_data(file_path)
 
     if data is not None:
@@ -148,7 +148,6 @@ def main():
         # Generate story and save it to README.md
         story = generate_story(data_summary)
         save_story(story, output_folder)
-
 
 if __name__ == "__main__":
     main()
