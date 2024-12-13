@@ -9,7 +9,6 @@ import numpy as np
 
 matplotlib.use('Agg')  # Use the Agg backend for generating images without displaying them
 
-
 # Set up the API key and proxy URL
 openai.api_key = os.getenv("AIPROXY_TOKEN")
 openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
@@ -49,15 +48,10 @@ def create_output_folder(file_path):
 
 def handle_missing_data(data):
     """Handle missing data by imputation or removal."""
-    # Handle non-numeric columns by attempting to convert them to numeric, setting errors='coerce' to turn invalid entries into NaN
-    for column in data.select_dtypes(include=[object]).columns:
-        try:
-            data[column] = pd.to_numeric(data[column], errors='coerce')  # Convert non-numeric columns to NaN
-        except Exception as e:
-            print(f"Error converting column {column}: {e}")
-
-    # Fill missing data (NaN) with the mean of the column
-    return data.apply(pd.to_numeric, errors='coerce').fillna(data.mean(), axis=0)
+    # Convert all columns to numeric, forcing errors to NaN for non-numeric columns
+    data = data.apply(pd.to_numeric, errors='coerce')
+    # Impute missing values with the mean of the column (only for numeric columns)
+    return data.fillna(data.mean())
 
 
 def analyze_data(data):
@@ -76,15 +70,10 @@ def analyze_data(data):
         data_no_outliers = data[(z_scores < 3).all(axis=1)]  # Keep rows where all z-scores are < 3
         print(f"Data after outlier removal: {data_no_outliers.shape}")
 
-        # Additional insights: checking correlations
-        correlation = data_no_outliers.corr()
-        print("--- Correlation Matrix ---")
-        print(correlation)
-
-        return summary.to_string(), data_no_outliers, correlation
+        return summary.to_string(), data_no_outliers
     except Exception as e:
         print(f"Error analyzing data: {e}")
-        return "", data, None
+        return "", data
 
 
 def visualize_data(data, output_folder):
@@ -105,57 +94,49 @@ def visualize_data(data, output_folder):
     else:
         print("No numeric columns found for correlation heatmap.")
 
-    # Pairplot (scatter plot matrix) to visualize relationships
-    if len(numeric_data.columns) > 1:  # Ensure there are at least two numeric columns
+    # Histograms for numeric columns
+    for column in numeric_data.columns:
         plt.figure(figsize=(8, 6))
-        sns.pairplot(numeric_data)
-        pairplot_path = os.path.join(output_folder, "pairplot.png")
-        plt.title("Pairplot of Numeric Columns")
-        plt.savefig(pairplot_path)
-        print(f"Saved: {pairplot_path}")
+        sns.histplot(data[column], kde=True, bins=30, color="blue")
+        plt.xlabel(column)
+        plt.ylabel("Frequency")
+        histogram_path = os.path.join(output_folder, f"{column}_histogram.png")
+        plt.title(f"Histogram of {column}")
+        plt.savefig(histogram_path)
+        print(f"Saved: {histogram_path}")
         plt.close()
 
-    # Scatter plots for key correlations
-    if len(numeric_data.columns) > 1:
-        for i, column1 in enumerate(numeric_data.columns):
-            for column2 in numeric_data.columns[i+1:]:
-                plt.figure(figsize=(8, 6))
-                sns.scatterplot(data=data, x=column1, y=column2)
-                plt.xlabel(column1)
-                plt.ylabel(column2)
-                scatter_path = os.path.join(output_folder, f"scatter_{column1}_vs_{column2}.png")
-                plt.title(f"Scatter plot of {column1} vs {column2}")
-                plt.savefig(scatter_path)
-                print(f"Saved: {scatter_path}")
-                plt.close()
+    # Additional visualization - Boxplot for outlier detection
+    plt.figure(figsize=(8, 6))
+    sns.boxplot(data=data[numeric_data.columns])
+    plt.title("Boxplot for Numeric Columns")
+    boxplot_path = os.path.join(output_folder, "boxplot.png")
+    plt.savefig(boxplot_path)
+    print(f"Saved: {boxplot_path}")
+    plt.close()
 
     print("--- Graphs Saved Successfully ---")
 
 
-def generate_story(data_summary, correlation_data, data):
+def generate_story(data_summary, correlation_data):
     """Generate detailed insights and recommendations based on dataset summary."""
     if len(data_summary) > 1000:  # Avoid exceeding token limits
         data_summary = data_summary[:1000] + "..."
-
-    # Create a dynamic prompt based on the correlation data and key insights
-    correlation_insights = correlation_data.to_string() if correlation_data is not None else "No significant correlations found."
-
+    
     report_prompt = f"""
     Create a detailed analysis of the following dataset:
-
+    
     {data_summary}
-
+    
     Insights:
     - Key trends and patterns observed in the dataset
-    - Correlations identified in the correlation matrix:
-    {correlation_insights}
-    - Recommendations for further analysis or actions based on the findings:
-      (e.g., actions to improve data quality, recommendations for stakeholders)
+    - Any correlations identified in the correlation heatmap
+    - Recommendations for further analysis or actions based on the findings
     """
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",  # Ensure using the right model
+            model="gpt-4o-mini",  # Ensure using the right model
             messages=[{"role": "system", "content": "You are an assistant generating detailed data analysis summaries."},
                       {"role": "user", "content": report_prompt}],
             max_tokens=600  # Increase token limit for a more detailed story
@@ -200,11 +181,11 @@ def main():
         output_folder = create_output_folder(file_path)
 
         # Perform analysis and visualization
-        data_summary, data_no_outliers, correlation_data = analyze_data(data)
+        data_summary, data_no_outliers = analyze_data(data)
         visualize_data(data_no_outliers, output_folder)
 
         # Generate and save the analysis story
-        story = generate_story(data_summary, correlation_data, data_no_outliers)
+        story = generate_story(data_summary, data_no_outliers)
         save_story(story, output_folder)
 
 
