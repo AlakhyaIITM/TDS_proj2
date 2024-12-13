@@ -9,7 +9,6 @@ import numpy as np
 
 matplotlib.use('Agg')  # Use the Agg backend for generating images without displaying them
 
-
 # Set up the API key and proxy URL
 openai.api_key = os.getenv("AIPROXY_TOKEN")
 openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
@@ -49,7 +48,9 @@ def create_output_folder(file_path):
 
 def handle_missing_data(data):
     """Handle missing data by imputation or removal."""
-    # Impute missing values with the mean of the column
+    # Convert all columns to numeric, forcing errors to NaN for non-numeric columns
+    data = data.apply(pd.to_numeric, errors='coerce')
+    # Impute missing values with the mean of the column (only for numeric columns)
     return data.fillna(data.mean())
 
 
@@ -136,10 +137,8 @@ def generate_story(data_summary, correlation_data):
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",  # Ensure using the right model
-            messages=[
-                {"role": "system", "content": "You are an assistant generating detailed data analysis summaries."},
-                {"role": "user", "content": report_prompt}
-            ],
+            messages=[{"role": "system", "content": "You are an assistant generating detailed data analysis summaries."},
+                      {"role": "user", "content": report_prompt}],
             max_tokens=600  # Increase token limit for a more detailed story
         )
 
