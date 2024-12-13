@@ -49,7 +49,15 @@ def create_output_folder(file_path):
 
 def handle_missing_data(data):
     """Handle missing data by imputation or removal."""
-    return data.fillna(data.mean())  # Impute missing values with the mean of the column
+    # Handle non-numeric columns by attempting to convert them to numeric, setting errors='coerce' to turn invalid entries into NaN
+    for column in data.select_dtypes(include=[object]).columns:
+        try:
+            data[column] = pd.to_numeric(data[column], errors='coerce')  # Convert non-numeric columns to NaN
+        except Exception as e:
+            print(f"Error converting column {column}: {e}")
+
+    # Fill missing data (NaN) with the mean of the column
+    return data.apply(pd.to_numeric, errors='coerce').fillna(data.mean(), axis=0)
 
 
 def analyze_data(data):
@@ -148,10 +156,8 @@ def generate_story(data_summary, correlation_data, data):
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4",  # Ensure using the right model
-            messages=[
-                {"role": "system", "content": "You are an assistant generating detailed data analysis summaries."},
-                {"role": "user", "content": report_prompt}
-            ],
+            messages=[{"role": "system", "content": "You are an assistant generating detailed data analysis summaries."},
+                      {"role": "user", "content": report_prompt}],
             max_tokens=600  # Increase token limit for a more detailed story
         )
 
