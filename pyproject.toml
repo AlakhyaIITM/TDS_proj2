@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "tds-proj2"
 version = "0.1.0"
-description = "Add your description here"
-authors = ["Your Name <you@example.com>"]
+description = "A project to explore data science concepts and techniques using real-world datasets."
+authors = ["Alakhya Sarkar <23f1001050@ds.study.iitm.ac.in>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -18,3 +18,15 @@ openai = "0.28"
 
 [tool.poetry.dev-dependencies]
 ruff = ">=0.8.2"
+
+[project]
+name = "tds-proj2"
+version = "0.1.0"
+description = "A project to explore data science concepts and techniques using real-world datasets."
+authors = ["Alakhya Sarkar <23f1001050@ds.study.iitm.ac.in>"]
+dependencies = [
+    "pandas",
+    "seaborn",
+    "matplotlib",
+    "openai==0.28"
+]
