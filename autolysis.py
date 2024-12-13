@@ -30,10 +30,10 @@ load_dotenv()
 
 # Constants
 API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-AI_PROXY = os.getenv("AI_PROXY")
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
 
-if not AI_PROXY:
-    raise ValueError("API token not set. Please set AI_PROXY in the environment.")
+if not AIPROXY_TOKEN:
+    raise ValueError("API token not set. Please set AIPROXY_TOKEN in the environment.")
 
 def load_data(file_path):
     """Load CSV data with encoding detection."""
@@ -71,7 +71,7 @@ def visualize_data(df, output_dir):
 def generate_narrative(analysis):
     """Generate narrative using LLM with retry logic."""
     headers = {
-        'Authorization': f'Bearer {AI_PROXY}',
+        'Authorization': f'Bearer {AIPROXY_TOKEN}',
         'Content-Type': 'application/json'
     }
     prompt = f"Provide a detailed analysis based on the following data summary: {analysis}"
