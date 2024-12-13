@@ -1,97 +1,104 @@
-import os
+import numpy as np
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
-import openai
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-from scipy.stats import pearsonr
+import seaborn as sns
 
-# Set up OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# Function to load dataset
-def load_dataset(file_path):
-    try:
-        return pd.read_csv(file_path)
-    except Exception as e:
-        raise ValueError(f"Error loading dataset: {e}")
-
-# Function to save outputs to the appropriate folder
-def save_output(output_path, data, is_visual=False):
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    if is_visual:
-        plt.savefig(output_path)
-        plt.close()
-    else:
-        with open(output_path, 'w') as f:
-            f.write(data)
-
-# Data summary function
-def generate_data_summary(df):
-    summary = {
-        "Shape": df.shape,
-        "Columns": list(df.columns),
-        "Missing Values": df.isnull().sum().to_dict(),
-        "Data Types": df.dtypes.to_dict(),
-    }
-    return summary
-
-# Advanced analysis with correlation and PCA
-def perform_advanced_analysis(df):
-    insights = {}
-    # Correlation analysis
-    correlations = df.corr()
-    insights["correlations"] = correlations
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(correlations, annot=True, fmt=".2f", cmap="coolwarm")
-    save_output("goodreads/correlation_heatmap.png", None, is_visual=True)
-
-    # PCA analysis
-    numeric_data = df.select_dtypes(include=['float64', 'int64'])
-    if not numeric_data.empty:
-        scaler = StandardScaler()
-        scaled_data = scaler.fit_transform(numeric_data.dropna())
-        pca = PCA(n_components=2)
-        pca_result = pca.fit_transform(scaled_data)
-        df['PCA1'] = pca_result[:, 0]
-        df['PCA2'] = pca_result[:, 1]
-        plt.figure(figsize=(8, 6))
-        sns.scatterplot(x='PCA1', y='PCA2', data=df)
-        save_output("goodreads/pca_scatterplot.png", None, is_visual=True)
-    return insights
-
-# Narrative generation using OpenAI
-def generate_narrative(data_summary, insights):
-    summary_str = f"Data Summary: {data_summary}\nKey Insights: {insights}"
-    prompt = f"""
-    Generate a detailed Markdown report:
-    {summary_str}
-    - Highlight trends and anomalies.
-    - Provide actionable insights.
+# Function to perform PCA using NumPy
+def pca_numpy(data, n_components):
     """
-    response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=prompt,
-        max_tokens=1000
-    )
-    return response['choices'][0]['text'].strip()
+    Perform Principal Component Analysis (PCA) using NumPy.
 
-# Main workflow
-def main(file_path):
-    df = load_dataset(file_path)
-    data_summary = generate_data_summary(df)
-    insights = perform_advanced_analysis(df)
-    narrative = generate_narrative(data_summary, insights)
+    Args:
+        data (numpy.ndarray): Input data matrix of shape (samples, features).
+        n_components (int): Number of principal components to retain.
 
-    # Save outputs
-    save_output("goodreads/data_summary.txt", str(data_summary))
-    save_output("goodreads/narrative.md", narrative)
+    Returns:
+        numpy.ndarray: Data transformed to the new principal components.
+    """
+    # Center the data by subtracting the mean
+    data_mean = np.mean(data, axis=0)
+    centered_data = data - data_mean
 
-# Run the script
-if __name__ == "__main__":
-    dataset_path = "dataset.csv"  # Replace with your dataset path
+    # Compute the covariance matrix
+    covariance_matrix = np.cov(centered_data, rowvar=False)
+
+    # Compute eigenvalues and eigenvectors
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
+
+    # Sort eigenvalues and eigenvectors in descending order
+    sorted_indices = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[sorted_indices]
+    eigenvectors = eigenvectors[:, sorted_indices]
+
+    # Select the top n_components eigenvectors
+    selected_eigenvectors = eigenvectors[:, :n_components]
+
+    # Transform the data
+    transformed_data = np.dot(centered_data, selected_eigenvectors)
+
+    return transformed_data
+
+# Load dataset
+def load_data(file_path):
+    """
+    Load CSV data into a pandas DataFrame.
+
+    Args:
+        file_path (str): Path to the CSV file.
+
+    Returns:
+        pandas.DataFrame: Loaded dataset.
+    """
     try:
-        main(dataset_path)
+        data = pd.read_csv(file_path)
+        print(f"Data loaded successfully from {file_path}")
+        return data
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error loading data: {e}")
+        return None
+
+# Generate correlation heatmap
+def generate_correlation_heatmap(data, output_path):
+    """
+    Generate a heatmap of correlations for the dataset.
+
+    Args:
+        data (pandas.DataFrame): Input data.
+        output_path (str): Path to save the heatmap image.
+    """
+    correlation_matrix = data.corr()
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(correlation_matrix, annot=True, fmt=".2f", cmap="coolwarm")
+    plt.title("Correlation Heatmap")
+    plt.savefig(output_path)
+    plt.close()
+    print(f"Correlation heatmap saved to {output_path}")
+
+# Main script
+def main():
+    # Example file path and parameters
+    file_path = "input.csv"  # Replace with your dataset file
+    heatmap_output = "correlation_heatmap.png"
+
+    # Load the data
+    data = load_data(file_path)
+    if data is None:
+        return
+
+    # Drop non-numeric columns for PCA
+    numeric_data = data.select_dtypes(include=[np.number])
+
+    # Perform PCA
+    n_components = 2  # Adjust as needed
+    try:
+        transformed_data = pca_numpy(numeric_data.to_numpy(), n_components)
+        print("PCA completed successfully.")
+        print(f"Transformed Data (first 5 rows):\n{transformed_data[:5]}")
+    except Exception as e:
+        print(f"Error performing PCA: {e}")
+
+    # Generate correlation heatmap
+    generate_correlation_heatmap(numeric_data, heatmap_output)
+
+if __name__ == "__main__":
+    main()
