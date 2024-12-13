@@ -1,104 +1,82 @@
-import numpy as np
+# PCA and Data Analysis Script
+
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
+import matplotlib.pyplot as plt
+from concurrent.futures import ThreadPoolExecutor
 
-# Function to perform PCA using NumPy
-def pca_numpy(data, n_components):
-    """
-    Perform Principal Component Analysis (PCA) using NumPy.
+# Function for PCA using NumPy
+def pca_numpy(data, num_components):
+    """Perform PCA using NumPy."""
+    # Standardizing data
+    mean = np.mean(data, axis=0)
+    data_std = data - mean
 
-    Args:
-        data (numpy.ndarray): Input data matrix of shape (samples, features).
-        n_components (int): Number of principal components to retain.
+    # Covariance matrix
+    covariance_matrix = np.cov(data_std.T)
 
-    Returns:
-        numpy.ndarray: Data transformed to the new principal components.
-    """
-    # Center the data by subtracting the mean
-    data_mean = np.mean(data, axis=0)
-    centered_data = data - data_mean
+    # Eigen decomposition
+    eigen_values, eigen_vectors = np.linalg.eig(covariance_matrix)
 
-    # Compute the covariance matrix
-    covariance_matrix = np.cov(centered_data, rowvar=False)
+    # Sorting eigenvalues and eigenvectors
+    sorted_indices = np.argsort(eigen_values)[::-1]
+    eigen_values = eigen_values[sorted_indices]
+    eigen_vectors = eigen_vectors[:, sorted_indices]
 
-    # Compute eigenvalues and eigenvectors
-    eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
+    # Selecting top components
+    principal_components = np.dot(data_std, eigen_vectors[:, :num_components])
+    return principal_components, eigen_values[:num_components]
 
-    # Sort eigenvalues and eigenvectors in descending order
-    sorted_indices = np.argsort(eigenvalues)[::-1]
-    eigenvalues = eigenvalues[sorted_indices]
-    eigenvectors = eigenvectors[:, sorted_indices]
-
-    # Select the top n_components eigenvectors
-    selected_eigenvectors = eigenvectors[:, :n_components]
-
-    # Transform the data
-    transformed_data = np.dot(centered_data, selected_eigenvectors)
-
-    return transformed_data
-
-# Load dataset
-def load_data(file_path):
-    """
-    Load CSV data into a pandas DataFrame.
-
-    Args:
-        file_path (str): Path to the CSV file.
-
-    Returns:
-        pandas.DataFrame: Loaded dataset.
-    """
-    try:
-        data = pd.read_csv(file_path)
-        print(f"Data loaded successfully from {file_path}")
-        return data
-    except Exception as e:
-        print(f"Error loading data: {e}")
-        return None
-
-# Generate correlation heatmap
-def generate_correlation_heatmap(data, output_path):
-    """
-    Generate a heatmap of correlations for the dataset.
-
-    Args:
-        data (pandas.DataFrame): Input data.
-        output_path (str): Path to save the heatmap image.
-    """
-    correlation_matrix = data.corr()
+# Function to generate correlation heatmap
+def generate_correlation_heatmap(df, output_file):
+    """Generate and save a correlation heatmap."""
     plt.figure(figsize=(10, 8))
-    sns.heatmap(correlation_matrix, annot=True, fmt=".2f", cmap="coolwarm")
+    sns.heatmap(df.corr(), annot=True, cmap="coolwarm", fmt=".2f")
     plt.title("Correlation Heatmap")
-    plt.savefig(output_path)
+    plt.savefig(output_file)
     plt.close()
-    print(f"Correlation heatmap saved to {output_path}")
 
-# Main script
-def main():
-    # Example file path and parameters
-    file_path = "input.csv"  # Replace with your dataset file
-    heatmap_output = "correlation_heatmap.png"
-
-    # Load the data
-    data = load_data(file_path)
-    if data is None:
-        return
-
-    # Drop non-numeric columns for PCA
-    numeric_data = data.select_dtypes(include=[np.number])
-
-    # Perform PCA
-    n_components = 2  # Adjust as needed
+# Function to handle multiple datasets
+def analyze_dataset(file_path, output_prefix):
+    """Analyze a dataset, perform PCA, and generate visualizations."""
     try:
-        transformed_data = pca_numpy(numeric_data.to_numpy(), n_components)
-        print("PCA completed successfully.")
-        print(f"Transformed Data (first 5 rows):\n{transformed_data[:5]}")
-    except Exception as e:
-        print(f"Error performing PCA: {e}")
+        # Load dataset
+        df = pd.read_csv(file_path)
 
-    # Generate correlation heatmap
-    generate_correlation_heatmap(numeric_data, heatmap_output)
+        # Select numeric data
+        numeric_data = df.select_dtypes(include=[np.number])
+
+        # Perform PCA
+        principal_components, explained_variance = pca_numpy(numeric_data, num_components=2)
+
+        # Save PCA results
+        pca_df = pd.DataFrame(principal_components, columns=["PC1", "PC2"])
+        pca_df.to_csv(f"{output_prefix}_pca_results.csv", index=False)
+
+        # Generate heatmap
+        generate_correlation_heatmap(numeric_data, f"{output_prefix}_heatmap.png")
+
+        print(f"Analysis completed for {file_path}. Results saved with prefix {output_prefix}.")
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+
+# Parallel processing for multiple datasets
+def process_datasets_parallel(datasets):
+    """Process multiple datasets in parallel."""
+    with ThreadPoolExecutor() as executor:
+        for dataset, prefix in datasets:
+            executor.submit(analyze_dataset, dataset, prefix)
 
 if __name__ == "__main__":
-    main()
+    # Input files and output prefixes
+    datasets = [
+        ("goodreads.csv", "goodreads"),
+        ("happiness.csv", "happiness"),
+        ("media.csv", "media")
+    ]
+
+    # Process datasets
+    process_datasets_parallel(datasets)
+
+    print("All datasets processed.")
