@@ -7,6 +7,7 @@
 #   "httpx",
 #   "chardet",
 #   "python-dotenv",
+#   "tenacity",
 # ]
 # ///
 
@@ -19,6 +20,7 @@ import matplotlib.pyplot as plt
 import httpx
 import chardet
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Force non-interactive matplotlib backend
 matplotlib.use('Agg')
@@ -28,10 +30,10 @@ load_dotenv()
 
 # Constants
 API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
+AI_PROXY = os.getenv("AI_PROXY")
 
-if not AIPROXY_TOKEN:
-    raise ValueError("API token not set. Please set AIPROXY_TOKEN in the environment.")
+if not AI_PROXY:
+    raise ValueError("API token not set. Please set AI_PROXY in the environment.")
 
 def load_data(file_path):
     """Load CSV data with encoding detection."""
@@ -65,10 +67,11 @@ def visualize_data(df, output_dir):
         plt.savefig(os.path.join(output_dir, f'{column}_distribution.png'))
         plt.close()
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def generate_narrative(analysis):
-    """Generate narrative using LLM."""
+    """Generate narrative using LLM with retry logic."""
     headers = {
-        'Authorization': f'Bearer {AIPROXY_TOKEN}',
+        'Authorization': f'Bearer {AI_PROXY}',
         'Content-Type': 'application/json'
     }
     prompt = f"Provide a detailed analysis based on the following data summary: {analysis}"
@@ -82,11 +85,13 @@ def generate_narrative(analysis):
         return response.json()['choices'][0]['message']['content']
     except httpx.HTTPStatusError as e:
         print(f"HTTP error occurred: {e}")
+        raise
     except httpx.RequestError as e:
         print(f"Request error occurred: {e}")
+        raise
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-    return "Narrative generation failed due to an error."
+        raise
 
 def main():
     import argparse
@@ -111,7 +116,8 @@ def main():
     narrative = generate_narrative(analysis)
 
     # Save narrative
-    with open(os.path.join(args.output_dir, 'README.md'), 'w') as f:
+    readme_path = os.path.join(args.output_dir, 'README.md')
+    with open(readme_path, 'w') as f:
         f.write(narrative)
 
 if __name__ == "__main__":
