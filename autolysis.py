@@ -16,6 +16,14 @@ else:
 
 def load_data(file_path):
     """Load dataset with encoding error handling."""
+    if not os.path.exists(file_path):
+        print(f"Error: File not found at path {file_path}")
+        return None
+
+    if not file_path.endswith(".csv"):
+        print("Error: The file provided is not a CSV.")
+        return None
+
     try:
         data = pd.read_csv(file_path, encoding='ISO-8859-1')  # Handle encoding issues
         print("Data loaded successfully!")
@@ -35,13 +43,16 @@ def create_output_folder(file_path):
 
 def analyze_data(data):
     """Display basic statistics and insights from the dataset."""
-    print("--- Summary Statistics ---")
-    print(data.describe())
-    print("--- Missing Data ---")
-    print(data.isnull().sum())
-
-    # Return a summary of the data analysis
-    return data.describe().to_string()
+    try:
+        print("--- Summary Statistics ---")
+        summary = data.describe()
+        print(summary)
+        print("--- Missing Data ---")
+        print(data.isnull().sum())
+        return summary.to_string()
+    except Exception as e:
+        print(f"Error analyzing data: {e}")
+        return ""
 
 
 def visualize_data(data, output_folder):
@@ -49,17 +60,21 @@ def visualize_data(data, output_folder):
     print("--- Generating Graphs ---")
 
     # Correlation heatmap
-    correlation = data.corr(numeric_only=True)
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(correlation, annot=True, fmt=".2f", cmap="coolwarm")
-    heatmap_path = os.path.join(output_folder, "correlation_heatmap.png")
-    plt.title("Correlation Heatmap")
-    plt.savefig(heatmap_path)
-    print(f"Saved: {heatmap_path}")
-    plt.close()
+    numeric_data = data.select_dtypes(include=['float64', 'int64'])
+    if not numeric_data.empty:
+        correlation = numeric_data.corr()
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(correlation, annot=True, fmt=".2f", cmap="coolwarm")
+        heatmap_path = os.path.join(output_folder, "correlation_heatmap.png")
+        plt.title("Correlation Heatmap")
+        plt.savefig(heatmap_path)
+        print(f"Saved: {heatmap_path}")
+        plt.close()
+    else:
+        print("No numeric columns found for correlation heatmap.")
 
-    # Histogram for numeric columns
-    for column in data.select_dtypes(include=['float64', 'int64']).columns:
+    # Histograms for numeric columns
+    for column in numeric_data.columns:
         plt.figure(figsize=(8, 6))
         sns.histplot(data[column], kde=True, bins=30, color="blue")
         histogram_path = os.path.join(output_folder, f"{column}_histogram.png")
@@ -73,6 +88,9 @@ def visualize_data(data, output_folder):
 
 def generate_story(data_summary):
     """Generate insights and a story using the dataset summary."""
+    if len(data_summary) > 1000:  # Avoid exceeding token limits
+        data_summary = data_summary[:1000] + "..."
+
     report_prompt = f"""
     Create a summary of the following dataset analysis:
     
@@ -98,7 +116,7 @@ def generate_story(data_summary):
         story = response['choices'][0]['message']['content'].strip()
         return story
 
-    except openai.OpenAIError as e:  # Updated to catch the new exception
+    except openai.OpenAIError as e:
         print(f"Error generating story: {e}")
         return "Story generation failed due to an error."
 
@@ -106,9 +124,12 @@ def generate_story(data_summary):
 def save_story(story, output_folder):
     """Save the analysis story into a README.md file."""
     readme_path = os.path.join(output_folder, "README.md")
-    with open(readme_path, "w") as file:
-        file.write(story)
-    print(f"Saved: {readme_path}")
+    try:
+        with open(readme_path, "w") as file:
+            file.write(story)
+        print(f"Saved: {readme_path}")
+    except Exception as e:
+        print(f"Error saving story: {e}")
 
 
 def main():
