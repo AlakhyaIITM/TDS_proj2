@@ -1,0 +1,12 @@
+import tomlkit
+
+# Load and parse the TOML file
+with open("pyproject.toml", "r") as file:
+    toml_data = file.read()
+
+# Validate the TOML syntax
+try:
+    tomlkit.loads(toml_data)
+    print("TOML file is valid!")
+except tomlkit.exceptions.TOMLDecodeError as e:
+    print(f"Error in TOML file: {e}")
