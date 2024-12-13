@@ -4,15 +4,17 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import openai
 import argparse
+import matplotlib
+matplotlib.use('Agg')  # Use the Agg backend for generating images without displaying them
 
 # Set up the API key and proxy URL
 openai.api_key = os.getenv("AIPROXY_TOKEN")
 openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 
-if openai.api_key:
-    print("API Key loaded successfully!")
+if not openai.api_key:
+    raise ValueError("API Key not found. Please set it as an environment variable.")
 else:
-    print("API Key not found. Please set it as an environment variable.")
+    print("API Key loaded successfully!")
 
 def load_data(file_path):
     """Load dataset with encoding error handling."""
@@ -56,7 +58,7 @@ def visualize_data(data, output_folder):
     """Generate and save visualizations."""
     print("--- Generating Graphs ---")
 
-    # Correlation heatmap
+    # Correlation heatmap for numeric data
     numeric_data = data.select_dtypes(include=['float64', 'int64'])
     if not numeric_data.empty:
         correlation = numeric_data.corr()
@@ -67,8 +69,6 @@ def visualize_data(data, output_folder):
         plt.savefig(heatmap_path)
         print(f"Saved: {heatmap_path}")
         plt.close()
-    else:
-        print("No numeric columns found for correlation heatmap.")
 
     # Histograms for numeric columns
     for column in numeric_data.columns:
@@ -101,10 +101,8 @@ def generate_story(data_summary):
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",  # Keep the model as gpt-4-mini
-            messages=[
-                {"role": "system", "content": "You are an assistant generating data analysis summaries."},
-                {"role": "user", "content": report_prompt}
-            ],
+            messages=[{"role": "system", "content": "You are an assistant generating data analysis summaries."},
+                      {"role": "user", "content": report_prompt}],
             max_tokens=500
         )
 
