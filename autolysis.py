@@ -1,101 +1,118 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "pandas",
+#   "seaborn",
+#   "matplotlib",
+#   "httpx",
+#   "chardet",
+#   "python-dotenv",
+# ]
+# ///
+
 import os
+import sys
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 import seaborn as sns
-from concurrent.futures import ThreadPoolExecutor
+import matplotlib
+import matplotlib.pyplot as plt
+import httpx
+import chardet
+from dotenv import load_dotenv
 
-# Replace PCA with a custom implementation
-class SimplePCA:
-    def __init__(self, n_components):
-        self.n_components = n_components
-        self.components_ = None
-        self.mean_ = None
+# Force non-interactive matplotlib backend
+matplotlib.use('Agg')
 
-    def fit_transform(self, X):
-        self.mean_ = np.mean(X, axis=0)
-        X_centered = X - self.mean_
-        cov_matrix = np.cov(X_centered, rowvar=False)
-        eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
-        sorted_indices = np.argsort(eigenvalues)[::-1]
-        eigenvectors = eigenvectors[:, sorted_indices]
-        self.components_ = eigenvectors[:, :self.n_components]
-        return np.dot(X_centered, self.components_)
+# Load environment variables
+load_dotenv()
 
-def analyze_data(file_path):
-    """Perform analysis on the dataset."""
+# Constants
+API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
+
+if not AIPROXY_TOKEN:
+    raise ValueError("API token not set. Please set AIPROXY_TOKEN in the environment.")
+
+def load_data(file_path):
+    """Load CSV data with encoding detection."""
     try:
-        # Load the data
-        data = pd.read_csv(file_path)
-        
-        # Basic stats
-        print("Dataset head:")
-        print(data.head())
+        with open(file_path, 'rb') as f:
+            result = chardet.detect(f.read())
+        encoding = result['encoding']
+        return pd.read_csv(file_path, encoding=encoding)
+    except Exception as e:
+        print(f"Error loading file: {e}")
+        sys.exit(1)
 
-        # Missing value check
-        print("\nMissing values:")
-        print(data.isnull().sum())
+def analyze_data(df):
+    """Perform basic data analysis."""
+    numeric_df = df.select_dtypes(include=['number'])  # Select only numeric columns
+    analysis = {
+        'summary': df.describe(include='all').to_dict(),
+        'missing_values': df.isnull().sum().to_dict(),
+        'correlation': numeric_df.corr().to_dict()  # Compute correlation only on numeric columns
+    }
+    return analysis
 
-        # Perform a simple PCA
-        numerical_data = data.select_dtypes(include=[np.number]).dropna()
-        pca = SimplePCA(n_components=2)
-        pca_result = pca.fit_transform(numerical_data)
-
-        # Add PCA results to the dataframe
-        data['PCA1'] = pca_result[:, 0]
-        data['PCA2'] = pca_result[:, 1]
-
-        # Visualization
-        plt.figure(figsize=(8, 6))
-        sns.heatmap(data.corr(), annot=True, fmt=".2f", cmap="coolwarm")
-        plt.title("Correlation Heatmap")
-        plt.savefig("heatmap.png")
+def visualize_data(df, output_dir):
+    """Generate and save visualizations."""
+    sns.set(style="whitegrid")
+    numeric_columns = df.select_dtypes(include=['number']).columns
+    for column in numeric_columns:
+        plt.figure()
+        sns.histplot(df[column].dropna(), kde=True)
+        plt.title(f'Distribution of {column}')
+        plt.savefig(os.path.join(output_dir, f'{column}_distribution.png'))
         plt.close()
 
-        print("Heatmap saved as heatmap.png")
-
-        # Save PCA results
-        data.to_csv("processed_data.csv", index=False)
-        print("Processed data saved as processed_data.csv")
-
-        # Create a README
-        create_readme(file_path, data)
-
+def generate_narrative(analysis):
+    """Generate narrative using LLM."""
+    headers = {
+        'Authorization': f'Bearer {AIPROXY_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+    prompt = f"Provide a detailed analysis based on the following data summary: {analysis}"
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    try:
+        response = httpx.post(API_URL, headers=headers, json=data, timeout=30.0)
+        response.raise_for_status()
+        return response.json()['choices'][0]['message']['content']
+    except httpx.HTTPStatusError as e:
+        print(f"HTTP error occurred: {e}")
+    except httpx.RequestError as e:
+        print(f"Request error occurred: {e}")
     except Exception as e:
-        print(f"Error during analysis: {e}")
+        print(f"An unexpected error occurred: {e}")
+    return "Narrative generation failed due to an error."
 
-def create_readme(file_path, data):
-    """Generate a README file for the dataset."""
-    readme_content = f"""# Dataset Analysis
+def main():
+    import argparse
 
-## Overview
+    parser = argparse.ArgumentParser(description="Analyze datasets and generate insights.")
+    parser.add_argument("file_path", help="Path to the dataset CSV file.")
+    parser.add_argument("-o", "--output_dir", default="output", help="Directory to save outputs.")
+    args = parser.parse_args()
 
-- **File Analyzed**: {os.path.basename(file_path)}
-- **Number of Rows**: {data.shape[0]}
-- **Number of Columns**: {data.shape[1]}
+    os.makedirs(args.output_dir, exist_ok=True)
 
-## Steps Performed
-1. Checked for missing values.
-2. Applied a simple PCA to reduce dimensions to 2.
-3. Generated a correlation heatmap (saved as `heatmap.png`).
-4. Saved the processed data as `processed_data.csv`.
+    # Load data
+    df = load_data(args.file_path)
 
-## Results
-- PCA components added: `PCA1`, `PCA2`
-- Heatmap saved to illustrate feature correlations.
+    # Analyze data
+    analysis = analyze_data(df)
 
-"""
+    # Visualize data
+    visualize_data(df, args.output_dir)
 
-    with open("README.md", "w") as f:
-        f.write(readme_content)
-    print("README.md file created.")
+    # Generate narrative
+    narrative = generate_narrative(analysis)
 
-def process_files_concurrently(file_paths):
-    """Process multiple files concurrently."""
-    with ThreadPoolExecutor() as executor:
-        executor.map(analyze_data, file_paths)
+    # Save narrative
+    with open(os.path.join(args.output_dir, 'README.md'), 'w') as f:
+        f.write(narrative)
 
 if __name__ == "__main__":
-    # Example usage
-    csv_files = ["media.csv"]  # Replace with your actual CSV file paths
-    process_files_concurrently(csv_files)
+    main()
