@@ -1,159 +1,89 @@
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#   "pandas",
-#   "seaborn",
-#   "matplotlib",
-#   "httpx",
-#   "chardet",
-#   "python-dotenv",
-#   "scipy",
-#   "numpy",
-# ]
-# ///
-
 import os
-import sys
 import pandas as pd
 import seaborn as sns
-import matplotlib
 import matplotlib.pyplot as plt
-import httpx
-import chardet
-import numpy as np
 from scipy.stats import skew, kurtosis
-from dotenv import load_dotenv
+import argparse
 
-# Force non-interactive matplotlib backend
-matplotlib.use('Agg')
+# Function to clean data by converting columns to numeric or date types where applicable
+def clean_data(df):
+    """Convert numeric columns with non-numeric values to valid types if possible."""
+    for col in df.columns:
+        # Attempt to convert to numeric, coercing errors to NaN
+        df[col] = pd.to_numeric(df[col], errors='ignore')
+        # Attempt to parse dates
+        try:
+            df[col] = pd.to_datetime(df[col], errors='ignore')
+        except Exception:
+            pass
+    return df
 
-# Load environment variables
-load_dotenv()
-
-# Constants
-API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
-
-if not AIPROXY_TOKEN:
-    raise ValueError("API token not set. Please set AIPROXY_TOKEN in the environment.")
-
-def load_data(file_path):
-    """Load CSV data with encoding detection."""
-    try:
-        with open(file_path, 'rb') as f:
-            result = chardet.detect(f.read())
-        encoding = result['encoding']
-        return pd.read_csv(file_path, encoding=encoding)
-    except Exception as e:
-        print(f"Error loading file: {e}")
-        sys.exit(1)
-
+# Function to analyze data
 def analyze_data(df):
-    """Perform detailed data analysis."""
-    numeric_df = df.select_dtypes(include=['number'])  # Select only numeric columns
-    
+    numeric_df = df.select_dtypes(include=['number'])
     analysis = {
         'summary': df.describe(include='all').to_dict(),
         'missing_values': df.isnull().sum().to_dict(),
-        'correlation': numeric_df.corr().to_dict(),
+        'correlation': numeric_df.corr().to_dict() if not numeric_df.empty else {},
         'skewness': {col: skew(df[col].dropna()) for col in numeric_df.columns},
         'kurtosis': {col: kurtosis(df[col].dropna()) for col in numeric_df.columns}
     }
-    
     return analysis
 
+# Function to visualize data
 def visualize_data(df, output_dir):
-    """Generate and save comprehensive visualizations."""
-    sns.set(style="whitegrid")
-    numeric_columns = df.select_dtypes(include=['number']).columns
-
-    # Correlation Heatmap
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(df.corr(), annot=True, cmap="coolwarm", fmt=".2f")
-    plt.title("Correlation Heatmap")
-    plt.savefig(os.path.join(output_dir, 'correlation_heatmap.png'))
-    plt.close()
-
-    # Pairplot for numeric data (if there are few columns)
-    if len(numeric_columns) <= 5:
-        sns.pairplot(df[numeric_columns].dropna())
-        plt.savefig(os.path.join(output_dir, 'pairplot.png'))
+    numeric_df = df.select_dtypes(include=['number'])  # Select only numeric columns
+    if not numeric_df.empty:
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(numeric_df.corr(), annot=True, cmap="coolwarm", fmt=".2f")
+        plt.title("Correlation Heatmap")
+        plt.savefig(os.path.join(output_dir, 'correlation_heatmap.png'))
         plt.close()
+    else:
+        print("No numeric columns available for correlation heatmap.")
 
-    # Distribution plots
-    for column in numeric_columns:
+    # Example of additional visualization (distribution of numeric columns)
+    for col in numeric_df.columns:
         plt.figure(figsize=(8, 6))
-        sns.histplot(df[column].dropna(), kde=True, color='blue')
-        plt.title(f'Distribution of {column}')
-        plt.xlabel(column)
-        plt.ylabel('Frequency')
-        plt.savefig(os.path.join(output_dir, f'{column}_distribution.png'))
+        sns.histplot(df[col], kde=True)
+        plt.title(f"Distribution of {col}")
+        plt.savefig(os.path.join(output_dir, f"distribution_{col}.png"))
         plt.close()
 
-def generate_narrative(analysis):
-    """Generate a detailed narrative using LLM."""
-    headers = {
-        'Authorization': f'Bearer {AIPROXY_TOKEN}',
-        'Content-Type': 'application/json'
-    }
-    
-    prompt = (
-        "Provide a detailed analysis based on the following data summary:\n\n"
-        f"Summary Statistics:\n{analysis['summary']}\n\n"
-        f"Missing Values:\n{analysis['missing_values']}\n\n"
-        f"Correlation:\n{analysis['correlation']}\n\n"
-        f"Skewness:\n{analysis['skewness']}\n\n"
-        f"Kurtosis:\n{analysis['kurtosis']}\n\n"
-        "Generate insights and potential actions based on these findings."
-    )
-
-    data = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-
-    try:
-        response = httpx.post(API_URL, headers=headers, json=data, timeout=30.0)
-        response.raise_for_status()
-        return response.json()['choices'][0]['message']['content']
-    except httpx.HTTPStatusError as e:
-        print(f"HTTP error occurred: {e}")
-    except httpx.RequestError as e:
-        print(f"Request error occurred: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-    
-    return "Narrative generation failed due to an error."
-
-def save_narrative(output_dir, narrative):
-    """Save the generated narrative to a README file."""
-    with open(os.path.join(output_dir, 'README.md'), 'w') as f:
-        f.write(narrative)
-
+# Main function
 def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Analyze datasets and generate insights.")
-    parser.add_argument("file_path", help="Path to the dataset CSV file.")
-    parser.add_argument("-o", "--output_dir", default="output", help="Directory to save outputs.")
+    parser = argparse.ArgumentParser(description="Analyze and visualize data from a CSV file.")
+    parser.add_argument('input_file', type=str, help="Path to the input CSV file.")
+    parser.add_argument('--output_dir', type=str, default='output', help="Directory to save the visualizations.")
     args = parser.parse_args()
 
+    # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Load data
-    df = load_data(args.file_path)
+    # Load the dataset
+    try:
+        df = pd.read_csv(args.input_file)
+        print(f"Data loaded successfully from {args.input_file}.")
+    except Exception as e:
+        print(f"Failed to load data: {e}")
+        return
 
-    # Analyze data
+    # Clean the data
+    df = clean_data(df)
+
+    # Analyze the data
     analysis = analyze_data(df)
+    analysis_output_path = os.path.join(args.output_dir, 'analysis.json')
+    with open(analysis_output_path, 'w') as f:
+        pd.json.dump(analysis, f, indent=4)
+    print(f"Analysis saved to {analysis_output_path}.")
 
-    # Visualize data
-    visualize_data(df, args.output_dir)
-
-    # Generate and save narrative
-    narrative = generate_narrative(analysis)
-    save_narrative(args.output_dir, narrative)
-
-    print(f"Analysis complete. Outputs saved to '{args.output_dir}'.")
+    # Visualize the data
+    try:
+        visualize_data(df, args.output_dir)
+        print(f"Visualizations saved to {args.output_dir}.")
+    except Exception as e:
+        print(f"Failed to visualize data: {e}")
 
 if __name__ == "__main__":
     main()
